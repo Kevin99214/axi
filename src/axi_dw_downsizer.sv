@@ -830,7 +830,13 @@ module axi_dw_downsizer #(
 
               // Evaluate output burst length
               automatic addr_t align_adj = (slv_req_i.aw.addr & size_mask & ~MstPortByteMask) / AxiMstPortStrbWidth;
-              w_req_d.burst_len          = (slv_req_i.aw.len + 1) * conv_ratio - align_adj - 1                     ;
+              // If slave burst length is 0, find last valid master data beat
+              if (slv_req_i.aw.len == '0) begin
+                automatic addr_t last_valid_beat = get_last_valid_write(slv_req_i.w.strb, conv_ratio) ;
+                w_req_d.burst_len                = last_valid_beat - align_adj - 1                    ;
+              end else begin
+                w_req_d.burst_len                = (slv_req_i.aw.len + 1) * conv_ratio - align_adj - 1;
+              end                     ;
 
               if (conv_ratio != 1) begin
                 w_req_d.aw.size = AxiMstPortMaxSize;
@@ -853,8 +859,9 @@ module axi_dw_downsizer #(
                 automatic addr_t conv_ratio = ((1 << slv_req_i.aw.size) + AxiMstPortStrbWidth - 1) / AxiMstPortStrbWidth;
 
                 // Evaluate output burst length
-                automatic addr_t align_adj = (slv_req_i.aw.addr & size_mask & ~MstPortByteMask) / AxiMstPortStrbWidth;
-                w_req_d.burst_len          = (conv_ratio >= align_adj + 1) ? (conv_ratio - align_adj - 1) : 0;
+                automatic addr_t align_adj       = (slv_req_i.aw.addr & size_mask & ~MstPortByteMask) / AxiMstPortStrbWidth;
+                automatic addr_t last_valid_beat = get_last_valid_write(slv_req_i.w.strb, conv_ratio)                      ;
+                w_req_d.burst_len                = (conv_ratio >= align_adj + 1) ? (last_valid_beat - align_adj - 1) : 0   ;
 
                 if (conv_ratio != 1) begin
                   w_state_d        = W_INCR_DOWNSIZE    ;
@@ -889,4 +896,17 @@ module axi_dw_downsizer #(
     end
   end
 
+  function automatic addr_t get_last_valid_write (
+    input logic [AxiSlvPortStrbWidth-1:0] slv_wstrb,
+    input addr_t conv_ratio
+  );
+    addr_t i;
+    for (i = conv_ratio; i > 0; i = i - 1) begin
+        if (slv_wstrb[(i-1)*AxiMstPortStrbWidth+:AxiMstPortStrbWidth] != 0) begin
+            return i;
+        end
+    end
+    return i;
+  endfunction
+    
 endmodule : axi_dw_downsizer
