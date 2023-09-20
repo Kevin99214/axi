@@ -906,7 +906,7 @@ module axi_dw_downsizer #(
             return i;
         end
     end
-    return i;
+    return conv_ratio;
   endfunction
     
 endmodule : axi_dw_downsizer
